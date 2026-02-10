@@ -32,6 +32,7 @@ const {
   getUsersList,
   roomExists,
 } = require("./rooms");
+const { setupTorrentRoutes } = require("./torrent");
 
 const app = express();
 app.use(cors());
@@ -47,6 +48,9 @@ const io = new Server(server, {
 });
 
 // ──────────────────────────── REST endpoints ────────────────────────────
+
+// Torrent streaming routes (server-side WebTorrent for TCP/UDP peer access)
+setupTorrentRoutes(app);
 
 /**
  * POST /api/rooms — create a new room, returns { roomId }
@@ -115,13 +119,21 @@ io.on("connection", (socket) => {
   });
 
   /**
-   * video-change — someone pasted a new YouTube URL.
-   * Reset playback to 0, paused, and broadcast.
+   * video-change — someone loaded new media (YouTube, URL, local, or torrent).
+   * Payload: { roomId, sourceType, videoId?, url?, magnetURI? }
+   * Reset playback to 0, paused, and broadcast to others.
    */
-  socket.on("video-change", ({ roomId, videoId }) => {
-    console.log(`🎬 Video change in ${roomId}: ${videoId}`);
-    updateRoom(roomId, { videoId, currentTime: 0, isPlaying: false });
-    socket.to(roomId).emit("video-change", { videoId });
+  socket.on("video-change", ({ roomId, sourceType, videoId, url, magnetURI }) => {
+    console.log(`🎬 Video change in ${roomId}: ${sourceType}`, videoId || url || magnetURI || "(local)");
+    updateRoom(roomId, {
+      sourceType: sourceType || "youtube",
+      videoId: videoId || null,
+      url: url || null,
+      magnetURI: magnetURI || null,
+      currentTime: 0,
+      isPlaying: false,
+    });
+    socket.to(roomId).emit("video-change", { sourceType, videoId, url, magnetURI });
   });
 
   /**

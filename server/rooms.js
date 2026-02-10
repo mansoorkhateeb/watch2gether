@@ -1,8 +1,11 @@
 /**
- * rooms.js — In-memory room state management (v2)
+ * rooms.js — In-memory room state management (v3)
  *
  * Each room stores:
- *   videoId     – current YouTube video ID
+ *   sourceType  – "youtube" | "url" | "local" | "torrent"
+ *   videoId     – YouTube video ID (when sourceType = "youtube")
+ *   url         – direct video URL (when sourceType = "url")
+ *   magnetURI   – magnet link (when sourceType = "torrent")
  *   currentTime – playback position (seconds)
  *   isPlaying   – whether the video is playing
  *   lastUpdate  – server timestamp of last state change (for drift calc)
@@ -16,7 +19,10 @@ const rooms = new Map();
  */
 function createRoom(roomId) {
   const room = {
+    sourceType: "youtube", // default mode
     videoId: null,
+    url: null,
+    magnetURI: null,
     currentTime: 0,
     isPlaying: false,
     lastUpdate: Date.now(),
@@ -66,13 +72,16 @@ function leaveRoom(roomId, socketId) {
 }
 
 /**
- * Update room state (videoId, currentTime, isPlaying).
+ * Update room state. Accepts any combination of fields.
  * Always stamps lastUpdate so new joiners can compute elapsed time.
  */
 function updateRoom(roomId, updates) {
   const room = rooms.get(roomId);
   if (!room) return null;
+  if (updates.sourceType !== undefined) room.sourceType = updates.sourceType;
   if (updates.videoId !== undefined) room.videoId = updates.videoId;
+  if (updates.url !== undefined) room.url = updates.url;
+  if (updates.magnetURI !== undefined) room.magnetURI = updates.magnetURI;
   if (updates.currentTime !== undefined) room.currentTime = updates.currentTime;
   if (updates.isPlaying !== undefined) room.isPlaying = updates.isPlaying;
   room.lastUpdate = Date.now();
@@ -107,7 +116,10 @@ function getRoomState(roomId) {
   }
 
   return {
+    sourceType: room.sourceType,
     videoId: room.videoId,
+    url: room.url,
+    magnetURI: room.magnetURI,
     currentTime,
     isPlaying: room.isPlaying,
     userCount: room.users.size,
